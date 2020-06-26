@@ -22,13 +22,14 @@ kernel void calculate(__global float *a_g, float2 x_lims, float2 y_lims, float2 
 	float dist = 0;
 	while (tmp < max_iters && dist < radius) {
 		z = cfloat_add(cfloat_mul(z, z), c); // julia set
+		// z = cfloat_add(cfloat_powr(cfloat_conj(z), 3), c); // tricorn
 		// z = cfloat_add(cfloat_mul(cfloat_conj(z), cfloat_conj(z)), c); // tricorn
 		// z = cfloat_add(cfloat_mul(z, z), z0); // mandelbrot
-		// cfloat_t tmp_c = cfloat_new(fabs(z.real), fabs(z.imag));
+		// cfloat_t tmp_c = cfloat_new(fabs(z.real), fabs(z.imag)); //burning ship
 		// z = cfloat_add(cfloat_mul(tmp_c, tmp_c), c); // burning ship
 		dist += cfloat_abs(cfloat_sub(z, z_old));
 		z_old = z;
-		tmp++;
+		tmp += 1.f;
 	}
 	
 	if (dist > radius) {

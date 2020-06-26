@@ -18,6 +18,7 @@ class JuliaRenderer:
 		self.debug = debug
 		self.filename = filename
 		self.running = Value(ctypes.c_bool, False)
+		self.should_render = Value(ctypes.c_bool, False)
 		self.iterations = iterations
 		self.resize = resize
 		# self.max_iters = np.int32(10)
@@ -98,6 +99,8 @@ class JuliaRenderer:
 		radius = np.float32(self.radius.value)
 		print("Saving image %s..." % filename)
 
+		self.queue.finish()
+	
 		self.prg.calculate(
 			self.queue, self.large_a_np.shape, None, 
 			self.large_a_g, self.xlim, self.ylim, self.c0, 
@@ -109,8 +112,6 @@ class JuliaRenderer:
 			self.large_a_g, self.large_render_g, self.large_dims_g, iters)
 		cl.enqueue_copy(self.queue, self.large_render_np, self.large_render_g)
 		self.queue.finish()
-
-
 
 		cv2.imwrite(filename, self.large_render_np * 255)
 		print("Saved image %s" % filename)
@@ -135,7 +136,7 @@ class JuliaRenderer:
 		if key == ord('q'):
 			return False
 		elif key == ord('p'):
-			self.save_image()
+			self.should_render.value = True
 		elif key == ord('+'):
 			self.zoom_in()
 		elif key == ord('-'):
@@ -166,6 +167,23 @@ class JuliaRenderer:
 			self.check_movement(key)
 		return True
 
+	def resize_image(self):
+		new_size = (int(self.xdim * self.resize), 
+			int(self.ydim * self.resize))
+		res = cv2.resize(self.res_np, 
+			dsize = new_size, interpolation = cv2.INTER_LANCZOS4)
+		return res
+
+	def decorate_image(self, res):
+		iters_info = "max_iters: %d" % (self.max_iters.value,)
+		radius_info = "radius: %d" % (self.radius.value,)
+		c0_info = "c: %.8f + %.8fi" % (self.c0[0], self.c0[1])
+		fps_info = "fps: %.1f" % (self.fps.value-0)
+		texts = (iters_info, radius_info, c0_info, fps_info)
+		font = cv2.FONT_HERSHEY_SIMPLEX
+		for i, text in enumerate(texts):
+			cv2.putText(res, text, (16, 32*(i+1)), font, 1, (255, 255, 255))
+
 	def setup_plot(self):
 		name = "Julia Set Explorer"
 		cv2.namedWindow(name)
@@ -181,17 +199,9 @@ class JuliaRenderer:
 			running = self.handle_keypress(key)
 			self.update_view()
 
-			res = cv2.resize(self.res_np, 
-				dsize = (int(self.xdim * self.resize), int(self.ydim * self.resize)), 
-				interpolation = cv2.INTER_LANCZOS4)
-			iters_info = "max_iters: %d" % (self.max_iters.value,)
-			radius_info = "radius: %d" % (self.radius.value,)
-			c0_info = "c: %.8f + %.8fi" % (self.c0[0], self.c0[1])
-			fps_info = "fps: %.1f" % (self.fps.value-0)
-			cv2.putText(res, iters_info, (16,32), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255))
-			cv2.putText(res, radius_info, (16,64), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255))
-			cv2.putText(res, c0_info, (16,96), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255))
-			cv2.putText(res, fps_info, (16,128), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255))
+			res = self.resize_image()
+			self.decorate_image(res)
+
 			cv2.imshow(name, res)
 		self.running.value = False
 
@@ -261,6 +271,7 @@ class StandardKernel(JuliaRenderer):
 		self.large_render_g = cl.Buffer(self.ctx, 
 			mf.WRITE_ONLY | mf.COPY_HOST_PTR, hostbuf = self.large_render_np)
 
+
 	def handle_data_presentation(self, event, 
 		render_frequency, stat_frequency, iters):
 		# event.wait()
@@ -291,6 +302,10 @@ class StandardKernel(JuliaRenderer):
 				self.dims_g, iters, radius)
 			self.handle_data_presentation(event, 
 				render_frequency, stat_frequency, iters)
+			if self.should_render.value:
+				self.save_image()
+				self.should_render.value = False
+
 			self.frame += 1
 
 		self.queue.finish()
