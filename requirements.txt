@@ -1,7 +1,7 @@
 appdirs==1.4.4
 decorator==4.4.2
 numpy==1.22.0
-opencv-python==4.2.0.34
+opencv-python==4.8.1.78
 pkg-resources==0.0.0
 pyopencl==2020.2
 pytools==2020.3.1
